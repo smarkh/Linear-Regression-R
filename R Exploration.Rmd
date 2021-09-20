@@ -1,0 +1,241 @@
+---
+title: "Inbound retry"
+author: "Mark"
+date: "9/15/2021"
+output: pdf_document
+---
+
+
+```{r}
+library(readxl)
+library(ggplot2)
+```
+
+load and filter data
+
+```{R}
+containers <- read.csv("unload_data.csv", header = TRUE)
+
+# change data types
+containers$ARRIVAL.DATE <- as.Date(containers$ARRIVAL.DATE, '%m/%d/%Y')
+containers$UNLOAD.DATE <- as.Date(containers$UNLOAD.DATE, '%m/%d/%Y')
+containers$UNLOAD.MINS <- as.numeric(containers$UNLOAD.MINS)
+containers$QTY <- as.numeric(containers$QTY)
+containers$CASES <- as.numeric(containers$CASES)
+containers$TEAM.SIZE <- as.numeric(containers$TEAM.SIZE)
+
+# filter
+filtered_containers <- containers[containers$UNLOAD.DATE >= as.Date('2020-04-01', '%Y-%m-%d'),]
+
+
+# add colummns
+filtered_containers$complexity = filtered_containers$Cases/filtered_containers$SKUs
+```
+
+data exploration
+```{R}
+ggplot(filtered_containers, aes(x = CASES, y=UNLOAD.MINS)) +
+  geom_point(aes(col=OCEAN.TL)) +
+  xlim(c(0, 6000)) + 
+  ylim(c(0, 250)) + 
+  labs(y="Unload Minutes", 
+       x="Cases", 
+       title="Case Effect")
+
+ggplot(filtered_containers, aes(x = log(SKUs), y=UNLOAD.MINS)) +
+  geom_point() +
+  geom_smooth() +
+  ylim(c(0, 250)) +
+  labs(y="Unload Minutes", 
+       x="Cases", 
+       title="Case Effect")    
+
+gg <- ggplot(filtered_containers, aes(x = QTY, y=UNLOAD.MINS)) +
+  geom_point(aes(col=OCEAN.TL)) +
+  xlim(c(0, 10000)) + 
+  ylim(c(0, 250)) + 
+  labs(y="Unload Minutes", 
+       x="QTY", 
+       title="QTY Effect")
+
+plot(gg)
+
+gg <- ggplot(filtered_containers, aes(x = as.factor(TEAM.SIZE), y=UNLOAD.MINS)) +
+  geom_boxplot() +
+  ylim(c(0,250))
+  labs(y="Unload Minutes", 
+       x="Team Size", 
+       title="Team Effect")
+
+plot(gg)
+    
+
+gg <- ggplot(filtered_containers, aes(x = PL, y=UNLOAD.MINS)) +
+  geom_boxplot() +
+  ylim(c(0,250))
+  labs(y="Unload Minutes", 
+       x="PL", 
+       title="PL Effect")
+
+plot(gg)
+
+
+gg <- ggplot(filtered_containers, aes(x = CARRIER, y=UNLOAD.MINS)) +
+  geom_boxplot() +
+  ylim(c(0,250))
+  labs(y="Unload Minutes", 
+       x="PL", 
+       title="Carrier Effect")
+
+plot(gg)
+
+
+gg <- ggplot(filtered_containers, aes(x = complexity, y=UNLOAD.MINS)) +
+  geom_point() +
+  ylim(c(0, 250)) + 
+  labs(y="Unload Minutes", 
+       x="complexity", 
+       title="complex")
+plot(gg)
+
+
+gg1 <- ggplot(filtered_containers, aes(x = log(complexity), y=UNLOAD.MINS)) +
+  geom_point() +
+  ylim(c(0, 250)) + 
+  labs(y="Unload Minutes", 
+       x="complexity", 
+       title="log-complec")
+plot(gg1)
+
+
+gg <- ggplot(filtered_containers, aes(x=UNLOAD.DATE, y=UNLOAD.MINS)) +
+  geom_line() +
+  geom_smooth(method="loess", se=F) + 
+  ylim(c(0, 250)) +
+  ggtitle("over-time")
+
+plot(gg)
+
+```
+
+Clean data for model
+```{r}
+# remove NAs
+prepped_containers <- filtered_containers[!is.na(filtered_containers$CASES),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$QTY),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$SKUs),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$OCEAN.TL),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$PL),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$CARRIER),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$UNLOAD.MINS),]
+prepped_containers <- prepped_containers[!is.na(prepped_containers$TEAM.SIZE),]
+
+# standardize values
+prepped_containers$PL <- tolower(prepped_containers$PL)
+prepped_containers <- prepped_containers[prepped_containers$UNLOAD.MINS>5,]
+
+
+# remove outliers
+outliers <- boxplot(prepped_containers$UNLOAD.MINS, plot=FALSE)$out
+x <- prepped_containers
+x<- x[-which(x$UNLOAD.MINS %in% outliers),]
+prepped_containers <- x
+
+
+outliers <- boxplot(prepped_containers$TEAM.SIZE, plot=FALSE)$out
+x <- prepped_containers
+x<- x[-which(x$TEAM.SIZE %in% outliers),]
+prepped_containers <- x
+
+outliers <- boxplot(prepped_containers$CASES, plot=FALSE)$out
+x <- prepped_containers
+x<- x[-which(x$CASES %in% outliers),]
+  prepped_containers <- x
+  
+outliers <- boxplot(prepped_containers$QTY, plot=FALSE)$out
+x <- prepped_containers
+x<- x[-which(x$QTY %in% outliers),]
+prepped_containers <- x
+
+outliers <- boxplot(prepped_containers$complexity, plot=FALSE)$out
+x <- prepped_containers
+x<- x[-which(x$complexity %in% outliers),]
+prepped_containers <- x
+
+# check
+summary(prepped_containers)
+
+
+sapply(prepped_containers, function(x) is.factor(x))
+
+hist(prepped_containers$TEAM.SIZE)
+hist(prepped_containers$CASES)
+hist(prepped_containers$QTY)
+hist(prepped_containers$UNLOAD.MINS)
+hist(log(prepped_containers$complexity))
+```
+
+train test split
+
+```{r}
+smp_size <- floor(0.85 * nrow(prepped_containers))
+
+set.seed(123)
+
+train_ix <- sample(seq_len(nrow(prepped_containers)), size = smp_size)
+
+train <- prepped_containers[train_ix,]
+test <- prepped_containers[-train_ix,]
+
+```
+
+
+
+
+create model
+```{r}
+# everything
+lin_mod = lm(
+  UNLOAD.MINS~CASES*QTY+SKUs*CASES+OCEAN.TL+PL+CARRIER+TEAM.SIZE+log(complexity), 
+  data=train)
+
+summary(lin_mod)
+
+
+# cut out insignificant variables
+lin_mod = lm(
+  UNLOAD.MINS~CASES*QTY+SKUs+OCEAN.TL+TEAM.SIZE+log(complexity), 
+  data=train)
+
+summary(lin_mod)
+
+# remove observations outside of cooks distance
+#prepped_containers <- prepped_containers[-c(1753,1807,1655), ]
+
+lin_mod = lm(
+  UNLOAD.MINS~CASES*QTY+log(SKUs)+OCEAN.TL+TEAM.SIZE+log(complexity), 
+  data=train)
+
+summary(lin_mod)
+
+```
+
+validate assumptions
+```{r}
+par(mfrow=c(1,1))
+plot(lin_mod)
+
+model_summ <- summary(lin_mod)
+
+
+sqrt(mean(model_summ$residuals^2))
+```
+
+make some predictions
+```{r}
+preds <- predict(lin_mod, test)
+
+
+
+
+```
