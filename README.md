@@ -11,6 +11,7 @@ Currently the model predicts well with a MSE of 111, an RMSE of 10.1, a MAE of 8
 That being said there are some assumptions that are being violated (independance, and slightly linearity). I am in the process of investigating and improving these.
 
 Model being used: UNLOAD.MINS~CASES*QTY+log(SKUs)+OCEAN.TL+TEAM.SIZE+log(complexity)
+
                   (Unload_minutes = B1*(# of cases*quantity of product)+B2*Log(# of SKUs)+B3*(Ocean or Transload)+B4*(Team Members)+B5*log(Complexity Score))
 
 Note: Complexity is a score that I created for each container through feature extraction using the cases and QTY numbers. This is where I am assuming the non linearity assumption
