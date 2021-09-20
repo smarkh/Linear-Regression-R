@@ -220,7 +220,7 @@ summary(lin_mod)
 
 ```
 
-validate assumptions
+validate assumptions and evaluate
 ```{r}
 par(mfrow=c(1,1))
 plot(lin_mod)
@@ -229,13 +229,11 @@ model_summ <- summary(lin_mod)
 
 
 sqrt(mean(model_summ$residuals^2))
+mean(abs(model_summ$residuals))
 ```
 
 make some predictions
 ```{r}
 preds <- predict(lin_mod, test)
-
-
-
 
 ```
